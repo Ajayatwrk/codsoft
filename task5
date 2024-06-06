@@ -1,0 +1,54 @@
+pip install opencv-python opencv-python-headless dlib numpy
+import cv2
+import dlib
+import numpy as np
+
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+
+face_rec_model = dlib.face_recognition_model_v1('dlib_face_recognition_resnet_model_v1.dat')
+shape_predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+
+def detect_faces(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    return faces
+
+
+def get_face_encodings(image, faces):
+    face_encodings = []
+    for (x, y, w, h) in faces:
+        face = dlib.rectangle(int(x), int(y), int(x + w), int(y + h))
+        shape = shape_predictor(image, face)
+        face_encoding = np.array(face_rec_model.compute_face_descriptor(image, shape, 1))
+        face_encodings.append(face_encoding)
+    return face_encodings
+
+
+def compare_faces(known_face_encodings, face_encoding_to_check, tolerance=0.6):
+    distances = np.linalg.norm(known_face_encodings - face_encoding_to_check, axis=1)
+    return list(distances <= tolerance)
+
+known_image = cv2.imread('known_face.jpg')
+known_faces = detect_faces(known_image)
+known_face_encodings = get_face_encodings(known_image, known_faces)
+
+
+unknown_image = cv2.imread('unknown_face.jpg')
+unknown_faces = detect_faces(unknown_image)
+unknown_face_encodings = get_face_encodings(unknown_image, unknown_faces)
+
+
+for i, unknown_face_encoding in enumerate(unknown_face_encodings):
+    results = compare_faces(known_face_encodings, unknown_face_encoding)
+    print(f"Face {i + 1} matches: {results}")
+    (x, y, w, h) = unknown_faces[i]
+    if True in results:
+        cv2.rectangle(unknown_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    else:
+        cv2.rectangle(unknown_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
+
+cv2.imshow('Image', unknown_image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
